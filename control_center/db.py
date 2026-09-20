@@ -96,6 +96,16 @@ CREATE TABLE IF NOT EXISTS system_settings (
     value TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS watchlist (
+    id TEXT PRIMARY KEY,
+    post_url TEXT NOT NULL UNIQUE,
+    label TEXT,
+    account_id TEXT NOT NULL,
+    last_checked_at TEXT,
+    last_comment_count INTEGER NOT NULL DEFAULT 0,
+    added_at TEXT NOT NULL
+);
 """
 
 

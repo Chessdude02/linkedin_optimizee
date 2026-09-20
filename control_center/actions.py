@@ -125,6 +125,27 @@ def list_actions(
     return [_row_to_dict(r) for r in rows]
 
 
+def has_open_or_executed(
+    conn: sqlite3.Connection, *, target_id: str, action_type: str
+) -> bool:
+    """True if an action of this type against this target is already
+    pending review, approved, executing, or done. Used by agents that
+    propose repeatedly over time (e.g. the Exploration Agent re-checking
+    a watchlist) to avoid nagging with the same proposal every run.
+
+    Deliberately does NOT count DECLINED/EXPIRED/FAILED as blocking --
+    a human declining a reaction on a post doesn't forbid ever proposing
+    a *comment* on it, and a failed attempt shouldn't permanently prevent
+    retrying with fresh content.
+    """
+    row = conn.execute(
+        "SELECT 1 FROM actions WHERE target_id = ? AND action_type = ? "
+        "AND status IN ('PENDING', 'APPROVED', 'EXECUTING', 'EXECUTED') LIMIT 1",
+        (target_id, action_type),
+    ).fetchone()
+    return row is not None
+
+
 def count_by_status(conn: sqlite3.Connection) -> dict[str, int]:
     rows = conn.execute("SELECT status, COUNT(*) as n FROM actions GROUP BY status").fetchall()
     return {r["status"]: r["n"] for r in rows}

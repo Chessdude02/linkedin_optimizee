@@ -17,16 +17,64 @@ This is a risk-reduced, fail-closed, auditable design. It is not, and
 does not claim to be, risk-free — no software architecture can honestly
 claim that.
 
-## Current status: Phase 1 through 7
+## Current status: Phase 1 through 7, plus a first real agent
 
 Built and tested — including one real end-to-end run against a live
 LinkedIn account (`CREATE_REACTION`, verified by checking the actual
-post). 112 automated tests, all mocked-network; that one real run is
+post). 136 automated tests, all mocked-network; that one real run is
 separate proof the pipeline works outside of unit tests, not a
 replacement for them. See `SECURITY.md`, `ARCHITECTURE.md`,
 `THREAT_MODEL.md`, and `RUNBOOK.md` for the full picture — the runbook in
 particular is written from real failures hit during that first setup
 (env-file gotchas, a URL-parser bug, a mock-mode mixup), not speculation.
+
+### Exploration Agent (`agents/exploration_agent.py`)
+
+The first actual agent, filling in one of the four roles the original
+design sketched out (Research/Content/Engagement/Analytics — see
+`ARCHITECTURE.md` for why the other three aren't built the same way).
+It has exactly one capability: calling
+`control_center.actions.request_action(caller_role="agent", ...)`. It
+cannot approve, execute, touch the kill switch, or add itself to its own
+watchlist.
+
+**What it does:** you give it a watchlist of specific post URLs (there is
+no LinkedIn search/feed API available anywhere in this stack, so
+"exploring" means periodically re-checking posts you've told it to
+track, not open-ended discovery). For each one, it fetches the post and
+its comments (via Apify — mirrors `linkedin-skills`' exact actor IDs and
+input schemas, reimplemented here so this repo stays self-contained) and
+asks Claude what's worth proposing: a reaction, a comment, a reshare, or
+even your own new post inspired by the topic. Anything worth it gets a
+real drafted `request_action()` call, landing in the same `PENDING` queue
+as everything else — reviewed and approved or declined exactly like a
+manual request.
+
+```bash
+python3 scripts/manage_watchlist.py add     # add a post URL to watch
+python3 run_exploration_agent.py --once     # one pass, proposes into the queue
+```
+
+Needs `APIFY_TOKEN` (read layer) and `ANTHROPIC_API_KEY` (drafting —
+without it, nothing gets proposed at all, since a template stub isn't
+worth a human's review time; this mirrors the graceful-degradation
+pattern the rest of the codebase uses for missing credentials).
+
+Duplicate-proposal protection: `actions.has_open_or_executed()` skips
+re-proposing the same action type against the same post while one is
+already pending, approved, executing, or done — but a declined or failed
+proposal doesn't permanently block trying again later, since the
+underlying content may have changed or a human might reconsider.
+
+**24 new tests** (136 total): the Apify client's request-building and
+response-normalizing (mirroring the exact schemas from
+`sergebulaev/linkedin-skills`' `lib/apify_client.py`), drafting's
+graceful no-credential fallback and Claude-response parsing, the
+watchlist CRUD, the duplicate-avoidance helper, and a full mocked
+end-to-end run through `explore_all()` verifying reshares target the
+`shareUrn` (not the activity URN) and reactions/comments target the
+activity URN — a distinction `backends/publora.py` already got right for
+manual requests, now verified for agent-generated ones too.
 
 ### Real execution backend (Phase 4/5)
 
@@ -164,7 +212,7 @@ python3 run_executor.py --once           # SEPARATE process -- actually executes
   schema creation, and `run_executor.py`'s loop body — everything above
   had only indirect coverage until then.
 
-**112 tests total, all passing.**
+**112 tests total from Phase 1-5, plus 24 more for the Exploration Agent -- 136 total, all passing.**
 
 ### Documentation (Phase 7)
 
@@ -200,7 +248,7 @@ entirely from real failures hit during first setup).
 pip install -r requirements.txt   # python-dotenv (optional), flask, requests
 cp .env.example .env              # safe defaults: no real writes, mock mode
 python3 demo.py                   # library-only flow, no dashboard needed
-python3 -m unittest discover -s tests -v   # all 112 tests
+python3 -m unittest discover -s tests -v   # all 136 tests
 ```
 
 To try the dashboard + separate executor, see the Phase 3 section above.
