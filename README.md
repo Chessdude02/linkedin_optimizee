@@ -17,13 +17,16 @@ This is a risk-reduced, fail-closed, auditable design. It is not, and
 does not claim to be, risk-free — no software architecture can honestly
 claim that.
 
-## Current status: Phase 1+2+3+4/5
+## Current status: Phase 1 through 7
 
-Built and tested. Important caveat up front: Phase 4/5 (below) has never
-been run against the real Publora API or a real LinkedIn account —
-everything is unit-tested with the network mocked. Treat it as reviewed,
-not as proven in production, until you've run it yourself against a real
-(ideally low-stakes) account.
+Built and tested — including one real end-to-end run against a live
+LinkedIn account (`CREATE_REACTION`, verified by checking the actual
+post). 112 automated tests, all mocked-network; that one real run is
+separate proof the pipeline works outside of unit tests, not a
+replacement for them. See `SECURITY.md`, `ARCHITECTURE.md`,
+`THREAT_MODEL.md`, and `RUNBOOK.md` for the full picture — the runbook in
+particular is written from real failures hit during that first setup
+(env-file gotchas, a URL-parser bug, a mock-mode mixup), not speculation.
 
 ### Real execution backend (Phase 4/5)
 
@@ -50,25 +53,38 @@ not as proven in production, until you've run it yourself against a real
   timeout or connection error returns `UNKNOWN` instead, and the action is
   left `EXECUTING` for a human to investigate rather than being retried or
   guessed into either outcome.
-- **19 additional passing tests** (106 total): every action type's request
-  shape, the reaction-type alias table, HTTP-error vs. timeout/connection-
-  error handling, the missing-credential and missing-account-registration
+- **19 additional passing tests**: every action type's request shape, the
+  reaction-type alias table, HTTP-error vs. timeout/connection-error
+  handling, the missing-credential and missing-account-registration
   fail-closed paths, and a full mocked-network integration test through
   `executor.execute_approved_action` end to end. No test ever makes a real
   network call.
+- **One real run, for real**: a `CREATE_REACTION` (a "like") against an
+  actual LinkedIn post, through the full pipeline — agent-style request →
+  dashboard approval → kill switch → real Publora API call — and manually
+  verified on the actual post afterward. Along the way this also caught
+  and fixed a real bug: `scripts/parse_post_url.py` only recognized
+  `activity`-shaped LinkedIn URLs and silently failed on the `ugcPost`
+  shape the real test post actually used. See `THREAT_MODEL.md`'s "Data
+  leakage" entry for a second, related finding about `CREATE_REACTION`
+  response handling that this run surfaced but didn't hit.
 
-Connect an account and go live (only in the execution service's own
-environment):
+Connect an account and go live:
 
 ```bash
-python3 -c "
-from control_center import accounts, db
-conn = db.get_connection('control_center.db')
-accounts.register_account(conn, 'my-account', 'Display name', 'linkedin-XXXXXXX')
-"
-# in run_executor.py's .env only: PUBLORA_API_KEY=sk_..., MOCK_EXECUTION=false
+python3 scripts/register_account.py
+# set PUBLORA_API_KEY and MOCK_EXECUTION=false (see RUNBOOK.md for
+# splitting this into a separate env from the dashboard's, for stricter
+# isolation than a single shared .env gives you)
 python3 run_executor.py
 ```
+
+One real finding worth knowing before you do this: **the only visible
+sign a run is real, not mock, is the `MOCK_EXECUTION=True/False` line
+`run_executor.py` prints at startup.** During the first live test an
+entire "real" attempt was actually still mock because an `.env` edit
+silently hadn't saved — read `RUNBOOK.md`'s troubleshooting section
+before assuming a result is real.
 
 ### Dashboard (Phase 3)
 
@@ -104,9 +120,11 @@ python3 run_executor.py
 Run it:
 
 ```bash
-python3 scripts/hash_password.py         # generate DASHBOARD_PASSWORD_HASH
-# put the values into .env, then:
-python3 dashboard/app.py                 # dashboard on :5000 -- approve/decline only
+python3 scripts/hash_password.py         # writes DASHBOARD_PASSWORD_HASH into .env directly
+python3 scripts/verify_env.py            # confirm everything actually loaded before continuing
+python3 -m dashboard.app                 # dashboard on :5000 -- approve/decline only
+                                          # (must be run as a module, not `python3 dashboard/app.py`
+                                          #  -- see RUNBOOK.md if that trips you up)
 python3 run_executor.py --once           # SEPARATE process -- actually executes APPROVED actions (mock)
 ```
 
@@ -144,19 +162,37 @@ python3 run_executor.py --once           # SEPARATE process -- actually executes
   (`tests/`); plus a further **25 tests** added in a later hardening pass
   directly covering `hashing.py`, `risk.py`, `audit.py` query behaviour,
   schema creation, and `run_executor.py`'s loop body — everything above
-  had only indirect coverage until then. **106 tests total, all passing.**
+  had only indirect coverage until then.
 
-**Not built yet** (see the phasing this project follows):
+**112 tests total, all passing.**
+
+### Documentation (Phase 7)
+
+Written after, and grounded in, the real end-to-end run above — not
+speculative. `SECURITY.md` (credential handling, dashboard security
+posture, what "tested" actually means here), `ARCHITECTURE.md` (data
+flow, component diagram, the one real deviation from ideal credential
+isolation), `THREAT_MODEL.md` (every threat category from the original
+design brief, each with what's mitigated and what residual risk
+remains — including two real findings from testing), `RUNBOOK.md`
+(setup, day-to-day operation, and a troubleshooting section built
+entirely from real failures hit during first setup).
+
+### Still not built
 
 - `SEND_MESSAGE` and `MODIFY_PROFILE` action types are defined (for the
   schema to have a home for them later) but have no execution path —
   `linkedin-skills` itself has no LinkedIn DM API access and no automated
   profile-write path, so there is nothing to route yet. `executor.py`
   refuses both with `BLOCKED: action_type_not_implemented`.
-- Full documentation set (SECURITY.md, ARCHITECTURE.md, THREAT_MODEL.md,
-  RUNBOOK.md) — deferred to Phase 7, once there's real production usage
-  to document accurately rather than a speculative one written before
-  anyone has run this against a live account.
+- Response-body validation for `CREATE_REACTION`'s success path (see
+  `THREAT_MODEL.md`'s "Data leakage" entry) — it currently trusts any
+  non-error HTTP status rather than confirming Publora's response
+  actually indicates the reaction was applied.
+- Two-factor auth on the dashboard, and the stricter split-`.env`
+  credential isolation described in `RUNBOOK.md` — both reasonable next
+  steps before trusting this with anything beyond a personal, trusted
+  single-operator setup.
 
 ## Quickstart
 
@@ -164,7 +200,7 @@ python3 run_executor.py --once           # SEPARATE process -- actually executes
 pip install -r requirements.txt   # python-dotenv (optional), flask, requests
 cp .env.example .env              # safe defaults: no real writes, mock mode
 python3 demo.py                   # library-only flow, no dashboard needed
-python3 -m unittest discover -s tests -v   # all 106 tests
+python3 -m unittest discover -s tests -v   # all 112 tests
 ```
 
 To try the dashboard + separate executor, see the Phase 3 section above.
