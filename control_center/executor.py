@@ -67,17 +67,26 @@ def _blocked(conn: sqlite3.Connection, action_id: str, reason: str, worker_id: s
     return {"status": "BLOCKED", "reason": reason}
 
 
-def _run_backend(action: dict[str, Any]) -> dict[str, Any]:
-    """The only implemented backend: mock. Returns a SUCCESS result with a
-    synthetic external_id and never contacts a real network."""
-    if not settings.MOCK_EXECUTION:
-        raise NotImplementedError(
-            "Real (Publora-backed) execution is not implemented in this build. "
-            "Refusing to execute for real rather than silently no-op'ing or "
-            "faking success. Set MOCK_EXECUTION=true for development, or wait "
-            "for the Phase 4/5 executor before enabling real writes."
+def _run_backend(conn: sqlite3.Connection, action: dict[str, Any]) -> dict[str, Any]:
+    """Mock backend by default. When MOCK_EXECUTION is false, dispatches to
+    the real Publora-backed backend -- imported lazily here so that
+    control_center.actions (the agent-facing module) and dashboard/ never
+    pull in control_center.backends.publora or read PUBLORA_API_KEY just by
+    being imported."""
+    if settings.MOCK_EXECUTION:
+        return {"result": "SUCCESS", "external_id": f"mock-{uuid.uuid4()}"}
+
+    from . import accounts as accounts_mod
+    from .backends import publora as publora_backend
+
+    platform_id = accounts_mod.get_platform_id(conn, action["account_id"])
+    if not platform_id:
+        raise publora_backend.PubloraBackendError(
+            f"no platform_id registered for account {action['account_id']!r}. "
+            "Call control_center.accounts.register_account(...) once for this "
+            "account before approving actions against it."
         )
-    return {"result": "SUCCESS", "external_id": f"mock-{uuid.uuid4()}"}
+    return publora_backend.run(action, platform_id)
 
 
 def execute_approved_action(
@@ -162,7 +171,7 @@ def execute_approved_action(
     )
 
     try:
-        result = _run_backend(action)
+        result = _run_backend(conn, action)
     except Exception as exc:  # noqa: BLE001 - deliberately broad: any failure here must FAIL, not raise past us
         error_code = str(exc)[:200]
         conn.execute(

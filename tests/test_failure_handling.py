@@ -51,8 +51,11 @@ class TestFailureHandling(unittest.TestCase):
         self.assertEqual(final["status"], "FAILED")
         self.assertIn("simulated timeout", final["failure_code"])
 
-    def test_real_backend_refused_when_mock_disabled(self):
-        result = make_action(self.conn, actions)
+    def test_real_backend_fails_closed_with_unregistered_account(self):
+        # Phase 4/5: real execution is implemented, but it still must fail
+        # closed -- an account nobody registered a platform_id for must
+        # never fall back to guessing or skipping the check.
+        result = make_action(self.conn, actions, account_id="unregistered-account")
         action_id = result["action_id"]
         self._approve(action_id)
 
@@ -61,7 +64,7 @@ class TestFailureHandling(unittest.TestCase):
                 self.conn, caller_role="executor", action_id=action_id, worker_id="w1"
             )
         self.assertEqual(outcome["status"], "FAILED")
-        self.assertIn("not implemented", outcome["error"].lower())
+        self.assertIn("no platform_id registered", outcome["error"].lower())
 
 
 if __name__ == "__main__":

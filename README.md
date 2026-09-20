@@ -17,9 +17,58 @@ This is a risk-reduced, fail-closed, auditable design. It is not, and
 does not claim to be, risk-free — no software architecture can honestly
 claim that.
 
-## Current status: Phase 1+2+3
+## Current status: Phase 1+2+3+4/5
 
-Built and tested:
+Built and tested. Important caveat up front: Phase 4/5 (below) has never
+been run against the real Publora API or a real LinkedIn account —
+everything is unit-tested with the network mocked. Treat it as reviewed,
+not as proven in production, until you've run it yourself against a real
+(ideally low-stakes) account.
+
+### Real execution backend (Phase 4/5)
+
+- **`control_center/backends/publora.py`** — implements the Publora
+  endpoints for every action type that has one: `CREATE_POST`/
+  `SCHEDULE_POST`, `CREATE_COMMENT`/`CREATE_REPLY`, `CREATE_REACTION`,
+  `RESHARE_POST`, `DELETE_POST`, `DELETE_COMMENT`. `SEND_MESSAGE` and
+  `MODIFY_PROFILE` still have no backend (see below) and raise rather than
+  silently succeeding.
+- **Credential isolation, enforced by import structure, not just intent**
+  — `PUBLORA_API_KEY` is read only inside `backends/publora.py`, which is
+  imported *lazily*, only from `executor._run_backend`, only when
+  `MOCK_EXECUTION=false`. Importing `control_center.actions` (what agents
+  use) or anything under `dashboard/` never reaches this module. A test
+  (`test_dashboard_process_never_touches_the_publora_credential`) asserts
+  no module under `dashboard/` references `executor` or `publora` in its
+  namespace at all.
+- **Account registry** (`control_center/accounts.py`) — maps a
+  control-center `account_id` to the real Publora `platformId`. Connecting
+  an account is a deliberate, separate operator step (see `.env.example`),
+  not something an agent or the dashboard's approve/decline flow can do.
+- **Fail-closed on ambiguity, distinctly from a definite failure** — an
+  HTTP 4xx/5xx from Publora raises and the action is marked `FAILED`; a
+  timeout or connection error returns `UNKNOWN` instead, and the action is
+  left `EXECUTING` for a human to investigate rather than being retried or
+  guessed into either outcome.
+- **19 additional passing tests** (106 total): every action type's request
+  shape, the reaction-type alias table, HTTP-error vs. timeout/connection-
+  error handling, the missing-credential and missing-account-registration
+  fail-closed paths, and a full mocked-network integration test through
+  `executor.execute_approved_action` end to end. No test ever makes a real
+  network call.
+
+Connect an account and go live (only in the execution service's own
+environment):
+
+```bash
+python3 -c "
+from control_center import accounts, db
+conn = db.get_connection('control_center.db')
+accounts.register_account(conn, 'my-account', 'Display name', 'linkedin-XXXXXXX')
+"
+# in run_executor.py's .env only: PUBLORA_API_KEY=sk_..., MOCK_EXECUTION=false
+python3 run_executor.py
+```
 
 ### Dashboard (Phase 3)
 
@@ -47,9 +96,9 @@ Built and tested:
   (list), Action Detail (exact content, hash, agent's reason, risk,
   approve/decline), Audit Log (filterable), System Controls (kill switch
   + write status)
-- **11 additional passing tests** (42 total) covering auth, lockout,
-  CSRF enforcement, approve/decline with correct and tampered hashes, the
-  kill switch's login+CSRF requirements, and the two structural
+- **11 additional passing tests** covering auth, lockout, CSRF
+  enforcement, approve/decline with correct and tampered hashes, the kill
+  switch's login+CSRF requirements, and the two structural
   execution-isolation checks above
 
 Run it:
@@ -89,37 +138,38 @@ python3 run_executor.py --once           # SEPARATE process -- actually executes
   (`control_center/audit.py`)
 - **Deterministic risk classification** — metadata only, never a
   substitute for approval (`control_center/risk.py`)
-- **31 passing tests** covering authorization, integrity/tamper
-  detection, expiration, duplicate detection, concurrent-execution
-  safety, the kill switch, prompt-injection isolation, and fail-closed
-  failure handling (`tests/`)
+- **31 tests** covering authorization, integrity/tamper detection,
+  expiration, duplicate detection, concurrent-execution safety, the kill
+  switch, prompt-injection isolation, and fail-closed failure handling
+  (`tests/`); plus a further **25 tests** added in a later hardening pass
+  directly covering `hashing.py`, `risk.py`, `audit.py` query behaviour,
+  schema creation, and `run_executor.py`'s loop body — everything above
+  had only indirect coverage until then. **106 tests total, all passing.**
 
 **Not built yet** (see the phasing this project follows):
 
-- **Phase 4/5 — Real execution backend.** `execute_approved_action()`
-  today only runs a mock backend (`MOCK_EXECUTION=true`, the default). If
-  you set `MOCK_EXECUTION=false` it refuses to execute with
-  `NotImplementedError` rather than pretending to publish. Wiring this to
-  the real `linkedin-skills` Publora client, with an isolated write
-  credential the agent process and dashboard never see, is unbuilt.
 - `SEND_MESSAGE` and `MODIFY_PROFILE` action types are defined (for the
   schema to have a home for them later) but have no execution path —
   `linkedin-skills` itself has no LinkedIn DM API access and no automated
-  profile-write path, so there is nothing to route yet.
+  profile-write path, so there is nothing to route yet. `executor.py`
+  refuses both with `BLOCKED: action_type_not_implemented`.
 - Full documentation set (SECURITY.md, ARCHITECTURE.md, THREAT_MODEL.md,
-  RUNBOOK.md) — deferred to Phase 7, once the dashboard and real executor
-  exist and there's an actual deployed system to document accurately.
+  RUNBOOK.md) — deferred to Phase 7, once there's real production usage
+  to document accurately rather than a speculative one written before
+  anyone has run this against a live account.
 
 ## Quickstart
 
 ```bash
-pip install -r requirements.txt   # python-dotenv (optional) + flask (for the dashboard)
+pip install -r requirements.txt   # python-dotenv (optional), flask, requests
 cp .env.example .env              # safe defaults: no real writes, mock mode
 python3 demo.py                   # library-only flow, no dashboard needed
-python3 -m unittest discover -s tests -v   # all 42 tests
+python3 -m unittest discover -s tests -v   # all 106 tests
 ```
 
 To try the dashboard + separate executor, see the Phase 3 section above.
+To go from mock to real execution, see the Phase 4/5 section above — and
+read its caveat first.
 
 ## Why a human still has to look at every action
 

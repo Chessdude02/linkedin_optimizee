@@ -205,6 +205,21 @@ class DashboardTestCase(unittest.TestCase):
         self.assertNotIn("executor", dir(app_module))
         self.assertNotIn("executor", dir(pending_module))
 
+    def test_dashboard_process_never_touches_the_publora_credential(self):
+        # Phase 4/5: the real backend and its PUBLORA_API_KEY read live in
+        # control_center.backends.publora, imported lazily only from
+        # executor._run_backend. Nothing under dashboard/ should import
+        # that module or control_center.executor at all -- so a dashboard
+        # process, even if compromised, has no code path to the write
+        # credential.
+        import sys
+
+        dashboard_modules = [name for name in sys.modules if name.startswith("dashboard")]
+        for name in dashboard_modules:
+            module = sys.modules[name]
+            self.assertNotIn("executor", dir(module), f"{name} must not reference executor")
+            self.assertNotIn("publora", dir(module), f"{name} must not reference the publora backend")
+
 
 if __name__ == "__main__":
     unittest.main()

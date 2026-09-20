@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS agents (
 CREATE TABLE IF NOT EXISTS accounts (
     id TEXT PRIMARY KEY,
     display_name TEXT NOT NULL,
+    platform_id TEXT,
     created_at TEXT NOT NULL
 );
 

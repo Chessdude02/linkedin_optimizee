@@ -11,3 +11,8 @@ python-dotenv>=1.2.3
 # implementation rather than a hand-rolled one -- Flask + itsdangerous
 # (session signing) is the actual dependency here.
 flask>=3.1.0
+
+# control_center/backends/publora.py (Phase 4/5) talks to the real
+# Publora API over HTTPS. Only run_executor.py's process should ever
+# actually need this installed alongside real credentials.
+requests>=2.31.0
