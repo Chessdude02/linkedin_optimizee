@@ -1,4 +1,4 @@
-"""Read-only LinkedIn data via Apify, for the Exploration Agent.
+"""Read-only LinkedIn data via Apify, for the Research Agent.
 
 Mirrors the actor IDs and input schemas from sergebulaev/linkedin-skills'
 lib/apify_client.py (verified against that file directly) rather than
@@ -9,7 +9,7 @@ on a sibling clone existing at some path on whatever machine runs it.
 This is read-only: it cannot publish, comment, react, or modify anything.
 Lower stakes than the Publora write credential, but APIFY_TOKEN is still
 only read here, and this module is only ever imported by
-agents/exploration_agent.py -- neither control_center.actions (agent API)
+agents/research_agent.py -- neither control_center.actions (agent API)
 nor dashboard/ needs LinkedIn read access at all.
 """
 from __future__ import annotations

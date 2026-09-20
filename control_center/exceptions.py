@@ -37,3 +37,13 @@ class ContentHashMismatchError(ControlCenterError):
 class DuplicateActionError(ControlCenterError):
     """Raised when a request would create an action that is substantially
     identical to one already active (pending/approved/executing/executed)."""
+
+
+class ResearchItemNotFoundError(ControlCenterError):
+    """Raised when a research_item id does not exist."""
+
+
+class AlreadyConvertedError(ControlCenterError):
+    """Raised when converting a research item that has already been
+    converted to an action -- conversion is one-way and idempotent-safe,
+    never silently creating a second action for the same finding."""

@@ -1,12 +1,15 @@
-"""Content drafting for the Exploration Agent, via the Claude API.
+"""Content drafting for the Research Agent, via the Claude API.
 
 Given a post's data (and its comments), asks Claude to decide what's
 worth proposing and draft the actual content -- a real comment, a real
-reshare caption, a real new-post idea -- rather than the Exploration
-Agent just flagging "something happened" for a human to write from
-scratch. The human still approves or declines every draft; this module
-only ever produces PROPOSALS, never anything sent to `request_action()`
-directly (that's `agents/exploration_agent.py`'s job).
+reshare caption, a real new-post idea -- rather than the Research Agent
+just flagging "something happened" for a human to write from scratch.
+This module only ever returns a recommendation dict; it never touches
+the database, never calls `request_action()`, and never calls
+`control_center.research` either -- turning its output into a
+`research_item` is `agents/research_agent.py`'s job, and turning that
+into a `PENDING` action is a separate, human-triggered step
+(`control_center/research.py`'s `convert_to_action`).
 
 Requires ANTHROPIC_API_KEY. Without it, `analyze` returns a template
 stub per proposal type instead of a real draft, and marks the drafts as

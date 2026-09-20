@@ -28,53 +28,78 @@ replacement for them. See `SECURITY.md`, `ARCHITECTURE.md`,
 particular is written from real failures hit during that first setup
 (env-file gotchas, a URL-parser bug, a mock-mode mixup), not speculation.
 
-### Exploration Agent (`agents/exploration_agent.py`)
+### Research & Discovery Agent (`agents/research_agent.py`)
 
 The first actual agent, filling in one of the four roles the original
 design sketched out (Research/Content/Engagement/Analytics — see
-`ARCHITECTURE.md` for why the other three aren't built the same way).
-It has exactly one capability: calling
-`control_center.actions.request_action(caller_role="agent", ...)`. It
-cannot approve, execute, touch the kill switch, or add itself to its own
-watchlist.
+`ARCHITECTURE.md` for why the other three aren't built the same way). It
+enforces its own version of the top-level invariant:
+
+```
+RESEARCH ≠ AUTHORIZE ≠ EXECUTE
+```
+
+This agent has exactly one write capability, scoped entirely to its own,
+separate `research_items`/`research_runs` tables
+(`control_center/research.py`) — a data model and status vocabulary
+(`DISCOVERED`/`ANALYZED`/`SURFACED`/`DISMISSED`/`SAVED`/`DRAFTED`/
+`CONVERTED_TO_ACTION`) deliberately disjoint from the action state
+machine's (`PENDING`/`APPROVED`/`EXECUTING`/...), so a research finding
+can never be confused with a pending action. It never calls
+`control_center.actions.request_action()` directly — discovering,
+analyzing, or drafting content never by itself creates anything in the
+`actions` table. It cannot approve, execute, touch the kill switch, add
+itself to its own watchlist, or reach the Publora write credential at
+any stage.
 
 **What it does:** you give it a watchlist of specific post URLs (there is
 no LinkedIn search/feed API available anywhere in this stack, so
-"exploring" means periodically re-checking posts you've told it to
+"researching" means periodically re-checking posts you've told it to
 track, not open-ended discovery). For each one, it fetches the post and
 its comments (via Apify — mirrors `linkedin-skills`' exact actor IDs and
 input schemas, reimplemented here so this repo stays self-contained) and
-asks Claude what's worth proposing: a reaction, a comment, a reshare, or
-even your own new post inspired by the topic. Anything worth it gets a
-real drafted `request_action()` call, landing in the same `PENDING` queue
-as everything else — reviewed and approved or declined exactly like a
-manual request.
+asks Claude what's worth surfacing as a recommendation: a reaction, a
+comment, a reshare, or even your own new post inspired by the topic.
+Anything worth it becomes a `research_item` — a non-actionable finding
+with the drafted content, its source URL, and the reasoning attached —
+shown in the dashboard's Research tab.
+
+Only an explicit human click on **"Create Action Proposal"** converts a
+finding into a real action, via `research.convert_to_action()` — the
+*only* bridge between the two systems. That conversion still just calls
+the ordinary `request_action()` and lands the result back in the same
+`PENDING` queue as everything else, needing the same separate approval
+before anything is ever sent to LinkedIn.
 
 ```bash
-python3 scripts/manage_watchlist.py add     # add a post URL to watch
-python3 run_exploration_agent.py --once     # one pass, proposes into the queue
+python3 scripts/manage_watchlist.py add   # add a post URL to watch
+python3 run_research_agent.py --once      # one pass, surfaces findings into the research dashboard
 ```
 
 Needs `APIFY_TOKEN` (read layer) and `ANTHROPIC_API_KEY` (drafting —
-without it, nothing gets proposed at all, since a template stub isn't
+without it, nothing gets surfaced at all, since a template stub isn't
 worth a human's review time; this mirrors the graceful-degradation
 pattern the rest of the codebase uses for missing credentials).
 
-Duplicate-proposal protection: `actions.has_open_or_executed()` skips
-re-proposing the same action type against the same post while one is
-already pending, approved, executing, or done — but a declined or failed
-proposal doesn't permanently block trying again later, since the
-underlying content may have changed or a human might reconsider.
+Deduplication, not duplicate-*action*-avoidance: findings are keyed by
+`(source_url, opportunity_type)` — re-checking a watched post bumps the
+existing finding's `last_seen`/`times_seen` instead of creating a
+near-duplicate draft every run.
 
-**24 new tests** (136 total): the Apify client's request-building and
-response-normalizing (mirroring the exact schemas from
-`sergebulaev/linkedin-skills`' `lib/apify_client.py`), drafting's
-graceful no-credential fallback and Claude-response parsing, the
-watchlist CRUD, the duplicate-avoidance helper, and a full mocked
-end-to-end run through `explore_all()` verifying reshares target the
-`shareUrn` (not the activity URN) and reactions/comments target the
-activity URN — a distinction `backends/publora.py` already got right for
-manual requests, now verified for agent-generated ones too.
+Deferred by design, not oversight: relevance/recency/discussion/novelty
+*scores* are left `NULL`. With only a single point-in-time check of each
+watched post, any number in those fields would be invented, not
+measured — exactly what this project's content-integrity rules forbid.
+
+**28 new tests** (164 total): 10 covering the core discover/draft/dedupe
+flow and `convert_to_action`'s one-way, idempotent-safe conversion
+(`tests/test_research_agent.py`), and 18 targeted security tests
+(`tests/test_research_security.py`) verifying, among other things, that
+the agent's own import graph never reaches `executor`/`backends`, that
+`PUBLORA_API_KEY` is never actually read outside `backends/publora.py`,
+that injected post/comment content can't create an action or escalate a
+role, and that a converted finding is always `PENDING`, never `APPROVED`
+or `EXECUTED`.
 
 ### Real execution backend (Phase 4/5)
 
@@ -212,7 +237,11 @@ python3 run_executor.py --once           # SEPARATE process -- actually executes
   schema creation, and `run_executor.py`'s loop body — everything above
   had only indirect coverage until then.
 
-**112 tests total from Phase 1-5, plus 24 more for the Exploration Agent -- 136 total, all passing.**
+**158 tests total, all passing** (`python3 -m unittest discover -s tests`) —
+Phase 1-5 authorization/integrity/execution coverage, the reconnaissance
+hardening pass (prompt-injection isolation, real-execution integration,
+URL parsing, dashboard/session security), and the Research Agent's 28
+tests described above.
 
 ### Documentation (Phase 7)
 

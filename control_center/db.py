@@ -106,6 +106,59 @@ CREATE TABLE IF NOT EXISTS watchlist (
     last_comment_count INTEGER NOT NULL DEFAULT 0,
     added_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS research_runs (
+    id TEXT PRIMARY KEY,
+    agent_id TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    finished_at TEXT,
+    sources_accessed TEXT,
+    result_count INTEGER NOT NULL DEFAULT 0,
+    errors TEXT,
+    status TEXT NOT NULL DEFAULT 'RUNNING'
+);
+
+-- Research findings are NOT actions. Nothing here is ever executable on
+-- its own; the only way a row here leads to a real write is a human
+-- explicitly converting it (research.convert_to_action), which creates
+-- an ordinary PENDING row in `actions` through the normal request_action
+-- path -- still requiring separate approval and execution.
+CREATE TABLE IF NOT EXISTS research_items (
+    id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL REFERENCES research_runs(id),
+    source TEXT NOT NULL,
+    source_url TEXT NOT NULL,
+    external_id TEXT,
+    author TEXT,
+    published_at TEXT,
+    retrieved_at TEXT NOT NULL,
+    content TEXT,
+    content_hash TEXT,
+    opportunity_type TEXT NOT NULL,
+    topic_tags TEXT,
+    relevance_score REAL,
+    recency_score REAL,
+    discussion_score REAL,
+    novelty_score REAL,
+    quality_signals TEXT,
+    reason_surfaced TEXT,
+    draft_content TEXT,
+    suggested_action_type TEXT,
+    suggested_target_id TEXT,
+    suggested_payload TEXT,
+    account_id TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'SURFACED',
+    converted_action_id TEXT,
+    first_seen TEXT NOT NULL,
+    last_seen TEXT NOT NULL,
+    times_seen INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_research_items_dedup ON research_items(source_url, opportunity_type);
+CREATE INDEX IF NOT EXISTS idx_research_items_status ON research_items(status);
+CREATE INDEX IF NOT EXISTS idx_research_items_run ON research_items(run_id);
 """
 
 

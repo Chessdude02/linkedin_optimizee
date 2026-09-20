@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Research — Control Center{% endblock %}
+{% block content %}
+<h1>Research Findings</h1>
+<p class="warning">
+  These are non-actionable recommendations from the Research Agent. Nothing here is a pending
+  action and nothing here has touched LinkedIn. Reviewing a finding does nothing by itself --
+  only clicking "Create Action Proposal" on a finding's detail page creates a PENDING action,
+  and even that still needs a separate Approve under Pending Actions.
+</p>
+
+<nav class="filter-nav">
+  <a href="{{ url_for('research.index', status='SURFACED') }}" class="{{ 'active' if status_filter == 'SURFACED' }}">Surfaced</a>
+  <a href="{{ url_for('research.index', status='SAVED') }}" class="{{ 'active' if status_filter == 'SAVED' }}">Saved</a
+  ><a href="{{ url_for('research.index', status='CONVERTED_TO_ACTION') }}" class="{{ 'active' if status_filter == 'CONVERTED_TO_ACTION' }}">Converted</a>
+  <a href="{{ url_for('research.index', status='DISMISSED') }}" class="{{ 'active' if status_filter == 'DISMISSED' }}">Dismissed</a>
+  <a href="{{ url_for('research.index', status='ALL') }}" class="{{ 'active' if status_filter == 'ALL' }}">All</a>
+</nav>
+
+<table>
+  <tr><th>Opportunity</th><th>Source</th><th>Reason surfaced</th><th>Times seen</th><th>Last seen</th><th></th></tr>
+  {% for item in items %}
+  <tr>
+    <td>{{ item.opportunity_type }}</td>
+    <td><a href="{{ item.source_url }}" target="_blank" rel="noopener noreferrer">{{ item.source_url }}</a></td>
+    <td>{{ item.reason_surfaced or '—' }}</td>
+    <td>{{ item.times_seen }}</td>
+    <td>{{ item.last_seen }}</td>
+    <td><a href="{{ url_for('research.detail', item_id=item.id) }}">Review</a></td>
+  </tr>
+  {% else %}
+  <tr><td colspan="6">No research findings in this view.</td></tr>
+  {% endfor %}
+</table>
+
+<h2>Recent research runs</h2>
+<table>
+  <tr><th>Started</th><th>Finished</th><th>Status</th><th>Results</th><th>Errors</th></tr>
+  {% for run in runs %}
+  <tr>
+    <td>{{ run.started_at }}</td>
+    <td>{{ run.finished_at or 'in progress' }}</td>
+    <td>{{ run.status }}</td>
+    <td>{{ run.result_count }}</td>
+    <td>{{ run.errors | tojson if run.errors and run.errors != '[]' else '—' }}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="5">No research runs yet.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

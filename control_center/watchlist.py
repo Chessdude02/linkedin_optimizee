@@ -1,10 +1,10 @@
-"""The Exploration Agent's watchlist: specific post URLs to keep tracking.
+"""The Research Agent's watchlist: specific post URLs to keep tracking.
 
 There is no LinkedIn search or feed API available anywhere in this
 stack -- only per-post lookups (post body, comments, engagers) and a
-user's own recent comments. So "explore LinkedIn" concretely means:
+user's own recent comments. So "research LinkedIn" concretely means:
 periodically re-check a list of specific posts you've told it to watch,
-for new comments and engagement, and propose actions on what changed.
+for new comments and engagement, and surface findings on what changed.
 
 Managing this list is a deliberate operator step, same as
 accounts.register_account -- not something request_action() or the

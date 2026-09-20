@@ -17,8 +17,8 @@ flask>=3.1.0
 # actually need this installed alongside real credentials.
 requests>=2.31.0
 
-# agents/exploration_agent.py: control_center/read_sources/apify.py talks
+# agents/research_agent.py: control_center/read_sources/apify.py talks
 # to Apify (also over requests, above), and control_center/drafting.py
-# uses the Claude API for content drafting. Only run_exploration_agent.py
+# uses the Claude API for content drafting. Only run_research_agent.py
 # needs ANTHROPIC_API_KEY / APIFY_TOKEN configured.
 anthropic>=0.40.0

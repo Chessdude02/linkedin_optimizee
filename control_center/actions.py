@@ -130,7 +130,7 @@ def has_open_or_executed(
 ) -> bool:
     """True if an action of this type against this target is already
     pending review, approved, executing, or done. Used by agents that
-    propose repeatedly over time (e.g. the Exploration Agent re-checking
+    propose repeatedly over time (e.g. the Research Agent re-checking
     a watchlist) to avoid nagging with the same proposal every run.
 
     Deliberately does NOT count DECLINED/EXPIRED/FAILED as blocking --

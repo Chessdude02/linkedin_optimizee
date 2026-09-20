@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Research finding — Control Center{% endblock %}
+{% block content %}
+<div class="approval-card">
+  <h1>Research finding</h1>
+  <h2>{{ item.opportunity_type }}</h2>
+
+  <p class="warning">
+    This is a recommendation, not an action. Nothing has been sent to LinkedIn and nothing is
+    pending approval. It only becomes a PENDING action if you click "Create Action Proposal"
+    below -- and that action still needs a separate Approve under Pending Actions before
+    anything is published.
+  </p>
+
+  <dl>
+    <dt>Status</dt><dd>{{ item.status }}</dd>
+    <dt>Source URL</dt><dd><a href="{{ item.source_url }}" target="_blank" rel="noopener noreferrer">{{ item.source_url }}</a></dd>
+    <dt>Author</dt><dd>{{ item.author or 'UNKNOWN' }}</dd>
+    <dt>Published at</dt><dd>{{ item.published_at or 'UNKNOWN' }}</dd>
+    <dt>First seen</dt><dd>{{ item.first_seen }}</dd>
+    <dt>Last seen</dt><dd>{{ item.last_seen }}</dd>
+    <dt>Times seen</dt><dd>{{ item.times_seen }}</dd>
+    <dt>Reason surfaced</dt><dd>{{ item.reason_surfaced or '—' }}</dd>
+    <dt>Relevance score</dt><dd>{{ item.relevance_score if item.relevance_score is not none else 'UNKNOWN (not computed)' }}</dd>
+    <dt>Recency score</dt><dd>{{ item.recency_score if item.recency_score is not none else 'UNKNOWN (not computed)' }}</dd>
+    <dt>Discussion score</dt><dd>{{ item.discussion_score if item.discussion_score is not none else 'UNKNOWN (not computed)' }}</dd>
+    <dt>Novelty score</dt><dd>{{ item.novelty_score if item.novelty_score is not none else 'UNKNOWN (not computed)' }}</dd>
+    <dt>Quality signals</dt><dd><pre class="content-preview">{{ item.quality_signals | tojson(indent=2) }}</pre></dd>
+  </dl>
+
+  <h3>Original content</h3>
+  <pre class="content-preview">{{ item.content or 'UNKNOWN' }}</pre>
+
+  {% if item.draft_content %}
+  <h3>Suggested draft</h3>
+  <pre class="content-preview">{{ item.draft_content }}</pre>
+  {% endif %}
+
+  <h3>Suggested action</h3>
+  <dl>
+    <dt>Action type</dt><dd>{{ item.suggested_action_type or 'None' }}</dd>
+    <dt>Target</dt><dd>{{ item.suggested_target_id or 'None' }}</dd>
+    <dt>Payload</dt><dd><pre class="content-preview">{{ item.suggested_payload | tojson(indent=2) if item.suggested_payload else 'None' }}</pre></dd>
+  </dl>
+
+  {% if item.status == 'CONVERTED_TO_ACTION' %}
+    <p>Already converted to action <a href="{{ url_for('pending.detail', action_id=item.converted_action_id) }}">{{ item.converted_action_id }}</a>.</p>
+  {% elif item.status == 'DISMISSED' %}
+    <p>This finding was dismissed. The record is kept but it won't resurface automatically.</p>
+  {% else %}
+    <form method="post" action="{{ url_for('research.dismiss', item_id=item.id) }}" class="inline-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="decline">Dismiss</button>
+    </form>
+    <form method="post" action="{{ url_for('research.save', item_id=item.id) }}" class="inline-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit">Save for later</button>
+    </form>
+    {% if item.suggested_action_type %}
+    <form method="post" action="{{ url_for('research.convert', item_id=item.id) }}" class="inline-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="approve">Create Action Proposal</button>
+    </form>
+    {% endif %}
+  {% endif %}
+</div>
+{% endblock %}

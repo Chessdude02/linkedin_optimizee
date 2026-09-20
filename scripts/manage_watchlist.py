@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Add, list, or remove posts the Exploration Agent watches.
+"""Add, list, or remove posts the Research Agent watches.
 
 Usage:
   python3 scripts/manage_watchlist.py add

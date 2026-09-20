@@ -16,7 +16,7 @@ from control_center import kill_switch, settings
 
 from . import auth
 from .csrf import get_csrf_token
-from .routes import audit_bp, dashboard_bp, pending_bp, system_bp
+from .routes import audit_bp, dashboard_bp, pending_bp, research_bp, system_bp
 
 
 def _truthy(raw: str | None, default: bool) -> bool:
@@ -66,6 +66,7 @@ def create_app(db_path: str | None = None) -> Flask:
     app.register_blueprint(auth.bp)
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(pending_bp)
+    app.register_blueprint(research_bp)
     app.register_blueprint(audit_bp)
     app.register_blueprint(system_bp)
 
