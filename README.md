@@ -17,9 +17,51 @@ This is a risk-reduced, fail-closed, auditable design. It is not, and
 does not claim to be, risk-free — no software architecture can honestly
 claim that.
 
-## Current status: Phase 1+2 only
+## Current status: Phase 1+2+3
 
 Built and tested:
+
+### Dashboard (Phase 3)
+
+- **Flask app** (`dashboard/`) with server-rendered pages only — no
+  frontend JavaScript, no secrets or tokens in the browser beyond the
+  signed session cookie itself
+- **Authentication** — single operator account, credentials from
+  environment vars, password hashed with `hashlib.scrypt`
+  (`dashboard/security.py`), login rate-limited with a lockout after 5
+  failed attempts in 5 minutes
+- **CSRF protection** on every state-changing POST (`dashboard/csrf.py`)
+- **Secure session cookies** — HttpOnly, SameSite=Strict, Secure by
+  default (opt out only for local plain-HTTP dev)
+- **Backend-enforced authorization** — every route calls
+  `approvals.approve_action(caller_role="human", approved_by=session["user"], ...)`;
+  `caller_role` is never taken from the request
+- **Structurally cannot execute** — `dashboard/` never imports
+  `control_center.executor` at all; there is no route, button, or code
+  path from the dashboard to a real write. Execution is a *separate
+  process*, `run_executor.py`, that you run independently. Two tests
+  (`tests/test_dashboard.py`) assert this structurally: no route
+  contains "execute", and neither `dashboard.app` nor
+  `dashboard.routes.pending` has `executor` in their namespace.
+- **Required pages**: Dashboard (counts by status), Pending Actions
+  (list), Action Detail (exact content, hash, agent's reason, risk,
+  approve/decline), Audit Log (filterable), System Controls (kill switch
+  + write status)
+- **11 additional passing tests** (42 total) covering auth, lockout,
+  CSRF enforcement, approve/decline with correct and tampered hashes, the
+  kill switch's login+CSRF requirements, and the two structural
+  execution-isolation checks above
+
+Run it:
+
+```bash
+python3 scripts/hash_password.py         # generate DASHBOARD_PASSWORD_HASH
+# put the values into .env, then:
+python3 dashboard/app.py                 # dashboard on :5000 -- approve/decline only
+python3 run_executor.py --once           # SEPARATE process -- actually executes APPROVED actions (mock)
+```
+
+### Phase 1+2 (security foundation + action queue)
 
 - **Database** (SQLite, 8 tables: users, agents, accounts, actions,
   approvals, executions, audit_logs, system_settings)
@@ -54,11 +96,6 @@ Built and tested:
 
 **Not built yet** (see the phasing this project follows):
 
-- **Phase 3 — Dashboard.** No web UI exists. Today the only way to
-  approve/decline/execute is by calling the Python functions directly (see
-  `demo.py`). A real dashboard needs its own auth, sessions, CSRF
-  protection, and backend-enforced authorization before it should exist —
-  building that without a review checkpoint first was the wrong call.
 - **Phase 4/5 — Real execution backend.** `execute_approved_action()`
   today only runs a mock backend (`MOCK_EXECUTION=true`, the default). If
   you set `MOCK_EXECUTION=false` it refuses to execute with
@@ -76,11 +113,13 @@ Built and tested:
 ## Quickstart
 
 ```bash
-pip install -r requirements.txt   # only python-dotenv, optional
+pip install -r requirements.txt   # python-dotenv (optional) + flask (for the dashboard)
 cp .env.example .env              # safe defaults: no real writes, mock mode
-python3 demo.py                   # see the full flow end-to-end
-python3 -m unittest discover -s tests -v
+python3 demo.py                   # library-only flow, no dashboard needed
+python3 -m unittest discover -s tests -v   # all 42 tests
 ```
+
+To try the dashboard + separate executor, see the Phase 3 section above.
 
 ## Why a human still has to look at every action
 

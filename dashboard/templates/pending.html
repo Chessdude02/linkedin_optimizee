@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Pending Actions — Control Center{% endblock %}
+{% block content %}
+<h1>Pending Actions</h1>
+<table>
+  <tr><th>Action</th><th>Agent</th><th>Account</th><th>Target</th><th>Created</th><th>Risk</th><th></th></tr>
+  {% for a in actions %}
+  <tr>
+    <td>{{ a.action_type }}</td>
+    <td>{{ a.agent_id }}</td>
+    <td>{{ a.account_id }}</td>
+    <td>{{ a.target_id or '—' }}</td>
+    <td>{{ a.created_at }}</td>
+    <td class="risk-{{ a.risk_level|lower }}">{{ a.risk_level }}</td>
+    <td><a href="{{ url_for('pending.detail', action_id=a.id) }}">Review</a></td>
+  </tr>
+  {% else %}
+  <tr><td colspan="7">No pending actions.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

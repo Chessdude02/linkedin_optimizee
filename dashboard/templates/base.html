@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Control Center{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  {% if session.get('user') %}
+  <nav>
+    <a href="{{ url_for('dashboard.index') }}">Dashboard</a>
+    <a href="{{ url_for('pending.list_pending') }}">Pending</a>
+    <a href="{{ url_for('audit.index') }}">Audit Log</a>
+    <a href="{{ url_for('system.index') }}">System Controls</a>
+    <span class="write-status {{ 'on' if write_status else 'off' }}">
+      {{ '🟢 WRITES ENABLED' if write_status else '🔴 ALL WRITES DISABLED' }}
+    </span>
+    <form method="post" action="{{ url_for('auth.logout') }}" class="inline-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="link-button">Log out ({{ session['user'] }})</button>
+    </form>
+  </nav>
+  {% endif %}
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <ul class="flashes">
+      {% for category, message in messages %}
+        <li class="{{ category }}">{{ message }}</li>
+      {% endfor %}
+      </ul>
+    {% endif %}
+  {% endwith %}
+
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

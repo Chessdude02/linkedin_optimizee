@@ -125,6 +125,11 @@ def list_actions(
     return [_row_to_dict(r) for r in rows]
 
 
+def count_by_status(conn: sqlite3.Connection) -> dict[str, int]:
+    rows = conn.execute("SELECT status, COUNT(*) as n FROM actions GROUP BY status").fetchall()
+    return {r["status"]: r["n"] for r in rows}
+
+
 def expire_stale_pending(conn: sqlite3.Connection) -> int:
     """Lazily flip any PENDING action past its expires_at to EXPIRED.
     Called opportunistically by approvals.approve_action/decline_action

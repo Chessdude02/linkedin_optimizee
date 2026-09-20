@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}System Controls — Control Center{% endblock %}
+{% block content %}
+<h1>System Controls</h1>
+
+<p class="write-status-large {{ 'on' if write_enabled else 'off' }}">
+  {{ '🟢 WRITES ENABLED' if write_enabled else '🔴 ALL WRITES DISABLED' }}
+</p>
+
+<form method="post" action="{{ url_for('system.set_write_enabled') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  {% if write_enabled %}
+    <input type="hidden" name="enabled" value="false">
+    <button type="submit" class="decline">🔴 DISABLE ALL WRITES (kill switch)</button>
+  {% else %}
+    <input type="hidden" name="enabled" value="true">
+    <button type="submit" class="approve">🟢 ENABLE WRITES</button>
+  {% endif %}
+</form>
+
+<h2>Connected services</h2>
+<ul>
+  <li>Execution backend: {{ 'MOCK (no real network calls)' if mock_execution else 'real (not implemented in this build)' }}</li>
+  <li>Publora / Apify / Pixfaro: not wired up yet — Phase 4/5</li>
+</ul>
+{% endblock %}

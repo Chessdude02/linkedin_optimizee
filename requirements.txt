@@ -1,7 +1,13 @@
-# Phase 1+2 uses only the Python standard library (sqlite3, hashlib, uuid,
-# json, threading) on purpose -- no external dependency is required to run
-# the action queue, the state machine, or the test suite.
+# control_center/ (Phase 1+2) uses only the Python standard library
+# (sqlite3, hashlib, uuid, json, threading) on purpose -- no external
+# dependency is required to run the action queue, the state machine, or
+# its test suite.
 #
 # python-dotenv is optional, for loading .env in local development; the
 # stdlib os.environ works fine without it if you export vars yourself.
 python-dotenv>=1.2.3
+
+# dashboard/ (Phase 3) needs a real, well-reviewed session/cookie
+# implementation rather than a hand-rolled one -- Flask + itsdangerous
+# (session signing) is the actual dependency here.
+flask>=3.1.0

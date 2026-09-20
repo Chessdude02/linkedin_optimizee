@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Review action — Control Center{% endblock %}
+{% block content %}
+<div class="approval-card {{ 'risk-' + action.risk_level|lower }}">
+  <h1>⚠️ {{ 'APPROVAL REQUIRED' if action.status == 'PENDING' else action.status }}</h1>
+  <h2>{{ action.action_type }}</h2>
+
+  <dl>
+    <dt>Account</dt><dd>{{ action.account_id }}</dd>
+    <dt>Requested by (agent)</dt><dd>{{ action.agent_id }}</dd>
+    <dt>Target</dt><dd>{{ action.target_id or 'None' }}</dd>
+    <dt>Agent's stated reason</dt><dd>{{ action.reason }}</dd>
+    <dt>Risk</dt><dd class="risk-{{ action.risk_level|lower }}">{{ action.risk_level }}</dd>
+    <dt>Status</dt><dd>{{ action.status }}</dd>
+    <dt>Created</dt><dd>{{ action.created_at }}</dd>
+    <dt>Expires</dt><dd>{{ action.expires_at or '—' }}</dd>
+    <dt>Payload hash</dt><dd><code>{{ action.payload_hash }}</code></dd>
+  </dl>
+
+  <h3>Exact content</h3>
+  <pre class="content-preview">{{ action.payload | tojson(indent=2) }}</pre>
+
+  {% if action.status == 'PENDING' %}
+    <p class="warning">
+      THIS ACTION WILL BECOME PUBLIC.
+      {% if action.risk_level == 'HIGH' %}THIS ACTION CANNOT BE EASILY UNDONE.{% endif %}
+    </p>
+    <form method="post" action="{{ url_for('pending.decline', action_id=action.id) }}" class="inline-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="decline">DECLINE</button>
+    </form>
+    <form method="post" action="{{ url_for('pending.approve', action_id=action.id) }}" class="inline-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="expected_hash" value="{{ action.payload_hash }}">
+      <button type="submit" class="approve">APPROVE</button>
+    </form>
+  {% else %}
+    <p>This action is <strong>{{ action.status }}</strong> and cannot be approved or declined again.
+    {% if action.status == 'APPROVED' %}It will be picked up by the execution service, not by this dashboard.{% endif %}</p>
+  {% endif %}
+</div>
+{% endblock %}

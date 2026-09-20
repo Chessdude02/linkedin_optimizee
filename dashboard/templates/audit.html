@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Audit Log — Control Center{% endblock %}
+{% block content %}
+<h1>Audit Log</h1>
+<form method="get" class="filter-form">
+  <input type="text" name="event_type" placeholder="event type (e.g. ACTION_APPROVED)" value="{{ event_type }}">
+  <input type="text" name="action_id" placeholder="action id" value="{{ action_id }}">
+  <button type="submit">Filter</button>
+</form>
+<table>
+  <tr><th>Time (UTC)</th><th>Event</th><th>Action</th><th>Actor</th><th>Details</th></tr>
+  {% for e in events %}
+  <tr>
+    <td>{{ e.created_at }}</td>
+    <td>{{ e.event_type }}</td>
+    <td>{{ e.action_id or '—' }}</td>
+    <td>{{ e.actor_role or '—' }}{% if e.actor_id %}:{{ e.actor_id }}{% endif %}</td>
+    <td><code>{{ e.details_json }}</code></td>
+  </tr>
+  {% else %}
+  <tr><td colspan="5">No matching events.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}
